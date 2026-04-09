@@ -8,6 +8,24 @@ const bcrypt = require("bcrypt")
 const jwt = require("jsonwebtoken")
 const mongoose = require("mongoose")
 
+
+
+// middleware to verify token
+const authMiddleware = (req, res, next) => {
+    const token = req.headers.authorization?.split(" ")[1] || req.cookies?.token
+
+    if (!token) {
+        return res.status(401).json({ message: "No token provided" })
+    }
+
+    try {
+        const decoded = jwt.verify(token, "secretkey")
+        req.user = decoded
+        next()
+    } catch (error) {
+        return res.status(401).json({ message: "Invalid token" })
+    }
+}
 const connectedtodb = async () => {
 
 
@@ -19,12 +37,19 @@ const connectedtodb = async () => {
     }
 
 }
+
+
 connectedtodb()
+
+
+
+
 app.use(express.json())
 
 app.use(cors({
     origin: "http://localhost:5174",
     // methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    credentials: true,
 }))
 
 app.get("/", (req, res) => {
@@ -48,8 +73,12 @@ app.get("/", (req, res) => {
 
 
 app.post("/api/register", async (req, res) => {
+
+    console.log(" [POST ]incoming register request ")
     const { username, email, password } = req.body
 
+
+    console.log(`username: ${username}, email: ${email}, password: ${password}`)
 
     if (!username || !email || !password) {
 
@@ -60,7 +89,9 @@ app.post("/api/register", async (req, res) => {
     // if user already exists, return an error
 
     const user = await User.findOne({ email: email })
+    console.log(`user: ${user}`)
     if (user) {
+        console.log("User already exists")
         return res.status(400).json({ message: "User already exists" })
     }
 
@@ -69,7 +100,7 @@ app.post("/api/register", async (req, res) => {
 
     const hasedPassword = await bcrypt.hash(password, 10)
 
-
+    console.log(`hasedPassword: ${hasedPassword}`)
 
     // create user object in database
 
@@ -81,6 +112,8 @@ app.post("/api/register", async (req, res) => {
 
     })
 
+    console.log(`newuser: ${newuser}`)
+
     newuser.save()
 
 
@@ -88,7 +121,7 @@ app.post("/api/register", async (req, res) => {
 
     const token = jwt.sign({ id: newuser._id }, "secretkey", { expiresIn: "1h" })
 
-
+    console.log(`token: ${token}`)
     res.cookie("token", token,
         // {httpOnly: true, secure: true, maxAge: 3600000} options 
     )
@@ -97,9 +130,10 @@ app.post("/api/register", async (req, res) => {
 
     // send the token to the client
 
-
+    console.log(" [POST ]sending token to the client ")
     console.log(username, email, password)
-    res.status(201).json({ message: "User created successfully", user: newuser })
+    console.log(`sending user: ${newuser}`)
+    return res.status(201).json({ message: "User created successfully", user: newuser })
 
 
 
@@ -149,6 +183,20 @@ app.post("/api/login", async (req, res) => {
 
 
 
+})
+
+app.get("/api/user", authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select("-password")
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" })
+        }
+
+        res.status(200).json({ user })
+    } catch (error) {
+        return res.status(500).json({ message: "Server error" })
+    }
 })
 
 // 200 - success

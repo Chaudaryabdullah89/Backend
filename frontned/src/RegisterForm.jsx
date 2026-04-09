@@ -22,7 +22,8 @@ const RegisterForm = () => {
       body: JSON.stringify(user),
       headers: {
         "Content-Type": "application/json"
-      }
+      },
+      credentials: "include"
     })
     const data = await response.json()
     console.log("response", response)
